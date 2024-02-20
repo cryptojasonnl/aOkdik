@@ -39,9 +39,11 @@ func RegisterGameTypes(
 	txSender types.TxSender,
 	gameFactory *contracts.DisputeGameFactoryContract,
 	caller *batching.MultiCaller,
+	l1Client source.L1Client,
 ) (CloseFunc, error) {
 	var closer CloseFunc
 	var l2Client *ethclient.Client
+	var outputSourceCreator *source.OutputSourceCreator
 	if cfg.TraceTypeEnabled(config.TraceTypeCannon) || cfg.TraceTypeEnabled(config.TraceTypePermissioned) {
 		l2, err := ethclient.DialContext(ctx, cfg.CannonL2)
 		if err != nil {
@@ -49,9 +51,8 @@ func RegisterGameTypes(
 		}
 		l2Client = l2
 		closer = l2Client.Close
+		outputSourceCreator = source.NewOutputSourceCreator(logger, rollupClient, l1Client)
 	}
-	outputSourceCreator := source.NewOutputSourceCreator(logger, rollupClient)
-
 	if cfg.TraceTypeEnabled(config.TraceTypeCannon) {
 		if err := registerCannon(faultTypes.CannonGameType, registry, ctx, cl, logger, m, cfg, outputSourceCreator, txSender, gameFactory, caller, l2Client); err != nil {
 			return nil, fmt.Errorf("failed to register cannon game type: %w", err)
