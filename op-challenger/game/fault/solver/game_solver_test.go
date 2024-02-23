@@ -357,7 +357,7 @@ func verifyGameResolution(t *testing.T, game types.Game, rootClaimCorrect bool) 
 		if claim.Claimant != challengerAddr {
 			continue
 		}
-		if claim.CounteredBy != (common.Address{}) && claim.CounteredBy != challengerAddr {
+		if claim.CounteredBy != (common.Address{}) {
 			t.Fatalf("Challenger posted claim %v but it was countered by someone else:\n%v", claim.ContractIndex, printClaim(claim, game))
 		}
 	}
