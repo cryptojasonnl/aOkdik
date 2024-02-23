@@ -132,13 +132,16 @@ func avoidPoisonedPrestate(game types.Game, action types.Action, correctTrace ty
 }
 
 func detectPoisonedStep(game types.Game, action types.Action, correctTrace types.TraceProvider) error {
-	if action.Type != types.ActionTypeStep {
+	position := resultingPosition(game, action)
+	if position.Depth() != game.MaxDepth() {
+		// Not at max depth yet
 		return nil
 	}
-	position := resultingPosition(game, action)
 	honestTraceIndex := position.TraceIndex(game.MaxDepth())
 	prestateIndex := honestTraceIndex
-	if action.IsAttack {
+	// If we're performing a move to post a leaf claim, assume the attacker will try to attack it from their
+	// poisoned prestate
+	if action.IsAttack || action.Type == types.ActionTypeMove {
 		prestateIndex = new(big.Int).Sub(prestateIndex, big.NewInt(1))
 	}
 	if prestateIndex.Cmp(big.NewInt(0)) < 0 {
@@ -171,7 +174,11 @@ func detectPoisonedStep(game types.Game, action types.Action, correctTrace types
 		return fmt.Errorf("failed to get correct trace at position %v: %w", preStateClaim.Position, err)
 	}
 	if correctValue != preStateClaim.Value {
-		return fmt.Errorf("stepping from poisoned prestate at claim %v when countering %v", preStateClaim.ContractIndex, action.ParentIdx)
+		if action.Type == types.ActionTypeStep {
+			return fmt.Errorf("stepping from poisoned prestate at claim %v when countering %v", preStateClaim.ContractIndex, action.ParentIdx)
+		} else {
+			return fmt.Errorf("posting leaf claim with poisoned prestate from claim %v when countering %v", preStateClaim.ContractIndex, action.ParentIdx)
+		}
 	}
 	return nil
 }
