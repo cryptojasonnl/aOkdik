@@ -154,14 +154,14 @@ type Claim struct {
 }
 
 // IsRoot returns true if this claim is the root claim.
-func (c *Claim) IsRoot() bool {
+func (c Claim) IsRoot() bool {
 	return c.Position.IsRootPosition()
 }
 
 // ChessTime returns the amount of time accumulated in the chess clock.
 // Does not assume the claim is countered and uses the specified time
 // to calculate the time since the claim was posted.
-func (c *Claim) ChessTime(now time.Time) time.Duration {
+func (c Claim) ChessTime(now time.Time) time.Duration {
 	timeSince := int64(0)
 	if now.Unix() > int64(c.Clock.Timestamp) {
 		timeSince = now.Unix() - int64(c.Clock.Timestamp)
