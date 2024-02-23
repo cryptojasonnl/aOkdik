@@ -18,7 +18,8 @@ var rules = []actionRule{
 	doNotDuplicateExistingMoves,
 	doNotDefendRootClaim,
 	avoidPoisonedPrestate,
-	detectPoisonedStep,
+	detectPoisonedStepPrestate,
+	detectFailedStep,
 }
 
 func printClaim(claim types.Claim, game types.Game) string {
@@ -119,19 +120,75 @@ func avoidPoisonedPrestate(game types.Game, action types.Action, correctTrace ty
 		return fmt.Errorf("failed to get correct trace at position %v: %w", preStateClaim.Position, err)
 	}
 	if correctValue != preStateClaim.Value {
-		// How far left can we push this claim?
-		pos := movePosition
-		for pos.Depth() < game.MaxDepth() {
-			pos = pos.Attack()
-		}
 		err = fmt.Errorf("prestate poisoned claim %v has invalid prestate and is left of honest claim countering %v at trace index %v", preStateClaim.ContractIndex, action.ParentIdx, honestTraceIndex)
-		fmt.Printf("%v\n%v\nAttack would get to %v\n", err.Error(), ancestors, pos.TraceIndex(game.MaxDepth()))
-		//return err
+		return err
 	}
 	return nil
 }
 
-func detectPoisonedStep(game types.Game, action types.Action, correctTrace types.TraceProvider) error {
+// detectFailedStep checks that step actions will succeed.
+//
+// INVARIANT: If a step is an attack, the poststate is valid if the step produces
+//
+//	the same poststate hash as the parent claim's value.
+//	If a step is a defense:
+//	  1. If the parent claim and the found post state agree with each other
+//	     (depth diff % 2 == 0), the step is valid if it produces the same
+//	     state hash as the post state's claim.
+//	  2. If the parent claim and the found post state disagree with each other
+//	     (depth diff % 2 != 0), the parent cannot be countered unless the step
+//	     produces the same state hash as `postState.claim`.
+func detectFailedStep(game types.Game, action types.Action, correctTrace types.TraceProvider) error {
+	if action.Type != types.ActionTypeStep {
+		// An invalid post state is not an issue if we are moving, only if the honest challenger has to call step.
+		return nil
+	}
+	position := resultingPosition(game, action)
+	if position.Depth() != game.MaxDepth() {
+		// Not at max depth yet
+		return nil
+	}
+	honestTraceIndex := position.TraceIndex(game.MaxDepth())
+	poststateIndex := honestTraceIndex
+	if !action.IsAttack {
+		poststateIndex = new(big.Int).Add(honestTraceIndex, big.NewInt(1))
+	}
+	// Walk back up the claims and find the claim required post state index
+	curr := game.Claims()[action.ParentIdx]
+	var poststateClaim types.Claim
+	for {
+		claimTraceIdx := curr.TraceIndex(game.MaxDepth())
+		if claimTraceIdx.Cmp(poststateIndex) == 0 {
+			poststateClaim = curr
+			break
+		}
+		if curr.IsRoot() {
+			break
+		}
+		parent, err := game.GetParent(curr)
+		if err != nil {
+			return fmt.Errorf("no parent of claim %v: %w", curr.ContractIndex, err)
+		}
+		curr = parent
+	}
+	if poststateClaim == (types.Claim{}) {
+		return fmt.Errorf("did not find required poststate to counter claim %v", action.ParentIdx)
+	}
+	correctValue, err := correctTrace.Get(context.Background(), poststateClaim.Position)
+	if err != nil {
+		return fmt.Errorf("failed to get correct trace at position %v: %w", poststateClaim.Position, err)
+	}
+	claim := game.Claims()[action.ParentIdx]
+	validStep := correctValue == poststateClaim.Value
+	parentPostAgree := (claim.Depth()-poststateClaim.Depth())%2 == 0
+	if parentPostAgree == validStep {
+		return fmt.Errorf("failed step against claim at %v using poststate from claim %v post state is correct? %v parentPostAgree? %v",
+			action.ParentIdx, poststateClaim.ContractIndex, validStep, parentPostAgree)
+	}
+	return nil
+}
+
+func detectPoisonedStepPrestate(game types.Game, action types.Action, correctTrace types.TraceProvider) error {
 	position := resultingPosition(game, action)
 	if position.Depth() != game.MaxDepth() {
 		// Not at max depth yet

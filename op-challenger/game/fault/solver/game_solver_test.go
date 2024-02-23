@@ -1,6 +1,7 @@
 package solver
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -27,7 +28,7 @@ const (
 	RunFreeloadersNotCountered
 )
 
-var challengerAddr = common.Address{0xaa, 0xbb, 0xcc, 0xdd}
+var challengerAddr = common.Address(bytes.Repeat([]byte{0xaa}, 20))
 
 func TestCalculateNextActions(t *testing.T) {
 	maxDepth := types.Depth(6)
