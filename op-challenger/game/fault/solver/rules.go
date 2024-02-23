@@ -154,31 +154,15 @@ func detectFailedStep(game types.Game, action types.Action, correctTrace types.T
 		poststateIndex = new(big.Int).Add(honestTraceIndex, big.NewInt(1))
 	}
 	// Walk back up the claims and find the claim required post state index
-	curr := game.Claims()[action.ParentIdx]
-	var poststateClaim types.Claim
-	for {
-		claimTraceIdx := curr.TraceIndex(game.MaxDepth())
-		if claimTraceIdx.Cmp(poststateIndex) == 0 {
-			poststateClaim = curr
-			break
-		}
-		if curr.IsRoot() {
-			break
-		}
-		parent, err := game.GetParent(curr)
-		if err != nil {
-			return fmt.Errorf("no parent of claim %v: %w", curr.ContractIndex, err)
-		}
-		curr = parent
-	}
-	if poststateClaim == (types.Claim{}) {
-		return fmt.Errorf("did not find required poststate to counter claim %v", action.ParentIdx)
+	claim := game.Claims()[action.ParentIdx]
+	poststateClaim, ok := game.AncestorWithTraceIndex(claim, poststateIndex)
+	if !ok {
+		return fmt.Errorf("did not find required poststate at %v to counter claim %v", poststateIndex, action.ParentIdx)
 	}
 	correctValue, err := correctTrace.Get(context.Background(), poststateClaim.Position)
 	if err != nil {
 		return fmt.Errorf("failed to get correct trace at position %v: %w", poststateClaim.Position, err)
 	}
-	claim := game.Claims()[action.ParentIdx]
 	validStep := correctValue == poststateClaim.Value
 	parentPostAgree := (claim.Depth()-poststateClaim.Depth())%2 == 0
 	if parentPostAgree == validStep {
@@ -207,24 +191,9 @@ func detectPoisonedStepPrestate(game types.Game, action types.Action, correctTra
 	}
 	// Walk back up the claims and find the claim with highest trace index < honestTraceIndex
 	claim := game.Claims()[action.ParentIdx]
-	var preStateClaim types.Claim
-	for {
-		claimTraceIdx := claim.TraceIndex(game.MaxDepth())
-		if claimTraceIdx.Cmp(prestateIndex) == 0 {
-			preStateClaim = claim
-			break
-		}
-		if claim.IsRoot() {
-			break
-		}
-		parent, err := game.GetParent(claim)
-		if err != nil {
-			return fmt.Errorf("no parent of claim %v: %w", claim.ContractIndex, err)
-		}
-		claim = parent
-	}
-	if preStateClaim == (types.Claim{}) {
-		return fmt.Errorf("did not find required prestate to counter claim %v", action.ParentIdx)
+	preStateClaim, ok := game.AncestorWithTraceIndex(claim, prestateIndex)
+	if !ok {
+		return fmt.Errorf("performing step against claim %v with no prestate available at %v", claim.ContractIndex, prestateIndex)
 	}
 	correctValue, err := correctTrace.Get(context.Background(), preStateClaim.Position)
 	if err != nil {
