@@ -59,7 +59,7 @@ func (g *GameBuilderSeq) IsRoot() bool {
 // The ContractIndex in claim is updated with its position in the game's claim array.
 // Does nothing if the claim already exists
 func (s *GameBuilderSeq) addClaimToGame(claim *types.Claim) {
-	if s.gameBuilder.Game.IsDuplicate(*claim) {
+	if _, dupe := s.gameBuilder.Game.IsDuplicate(*claim); dupe {
 		return
 	}
 	claim.ContractIndex = len(s.gameBuilder.Game.Claims())

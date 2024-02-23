@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const expectFreeloaderCounters = false
+const expectFreeloaderCounters = true
 
 type RunCondition uint8
 
